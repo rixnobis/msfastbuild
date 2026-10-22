@@ -8,9 +8,20 @@ The bff file it generates can also be a good starting point for a custom made bf
 
 It's a work in progress, but it has been used successfully for many Visual Studio 2015 projects. The VSIX plugin for Visual Studio 2015 adds "FASTBuild Project" and "FASTBuild solution" options to the Build menu, and it should also be usable from the commandline.
 
+## This fork
+
+This fork drives the MSBuild and CPPTasks of the newest installed Visual Studio (tested with Visual Studio 2026 / 18, v145 toolset) through MSBuildLocator. It builds with the .NET SDK (`dotnet build -c Release msfastbuild`) and runs on .NET Framework 4.8. Other changes:
+
+- `-o <file.bff>` writes the whole solution into one bff, so FASTBuild schedules every project at once instead of one project after another. Static library references become `.Libraries` dependencies of the executables that reference them.
+- Solution configuration mappings (ActiveCfg) are honored per project.
+- Tool paths come from the project's ExecutablePath, so the VS 2017+ `Tools\MSVC\<version>\bin\Host*` layout works. ClangCl projects use `clang-cl.exe` with `.CompilerFamily = 'clang-cl'`.
+- `/MP` is dropped, relative paths in compiler and linker options are rooted at the project directory, and an ObjectFileName of the form `$(IntDir)prefix_%(Filename).obj` maps to `.CompilerOutputPrefix`.
+- `-v 18` picks a Visual Studio major version. The VSIX is gone.
+- Custom build items and MASM/NASM items are reported as unsupported. Targets that NuGet packages add (copying DLLs next to the executable, for instance) are not run.
+
 ## Setup
 
-To use msfastbuild you need Visual Studio 2015 R3 installed. It relies on being able to find msbuild.
+To use msfastbuild you need Visual Studio 2017 or later installed (tested with 2026). MSBuildLocator finds it through vswhere.
 
 You need the [FBuild.exe](http://fastbuild.org/docs/download.html) either somewhere in your path, or to specify where it is using the -b argument on the commandline, or in VSIX msfastbuild options if you are using the VSIX. 
 
