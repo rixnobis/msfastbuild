@@ -527,7 +527,7 @@ namespace msfastbuild
 			return FindTool(P, ToolExe);
 		}
 
-		static string CompilerNode(string Exe, bool IsRc)
+		static string CompilerNode(string Exe, bool IsRc, Project P)
 		{
 			string Name;
 			if (CompilerNodeNames.TryGetValue(Exe, out Name))
@@ -537,6 +537,8 @@ namespace msfastbuild
 
 			StringBuilder S = new StringBuilder(string.Format("Compiler('{0}')\n{{\n", Name));
 			S.AppendFormat("\t.Executable = '{0}'\n", Esc(Exe));
+			if (!IsRc)
+				S.Append("\t.Environment =\n\t{\n" + EnvBody(P) + "\n\t}\n");
 			string FileName = Path.GetFileName(Exe).ToLowerInvariant();
 			if (IsRc)
 			{
@@ -577,6 +579,15 @@ namespace msfastbuild
 		{
 			StringBuilder S = new StringBuilder();
 			S.Append("Settings\n{\n\t.Environment =\n\t{\n");
+			S.Append(EnvBody(P));
+			S.Append("\n\t}\n}\n\n");
+			return S.ToString();
+		}
+
+		// INCLUDE/LIB/PATH come from the toolset, so a sln mixing ClangCl and MSVC projects
+		// needs them per compiler: clang's headers on cl.exe's INCLUDE break it (C1021).
+		static string EnvBody(Project P)
+		{
 			var Env = new List<string>
 			{
 				"INCLUDE=" + P.GetPropertyValue("IncludePath"),
@@ -588,9 +599,7 @@ namespace msfastbuild
 				"TEMP=" + Path.GetTempPath(),
 				"SystemRoot=" + Environment.GetEnvironmentVariable("SystemRoot"),
 			};
-			S.Append(string.Join(",\n", Env.Select(e => "\t\t'" + Esc(e) + "'")));
-			S.Append("\n\t}\n}\n\n");
-			return S.ToString();
+			return string.Join(",\n", Env.Select(e => "\t\t'" + Esc(e) + "'"));
 		}
 
 		// Splits an ObjectFileName value into the directory FASTBuild writes into and the
@@ -653,7 +662,7 @@ namespace msfastbuild
 			if (!OneBff)
 				OutputString.Append(SettingsBlock(ActiveProject));
 
-			string CC = CompilerNode(CompilerExecutable(ActiveProject), false);
+			string CC = CompilerNode(CompilerExecutable(ActiveProject), false, ActiveProject);
 
 			if (ActiveProject.GetItems("PreBuildEvent").Any())
 			{
@@ -745,7 +754,7 @@ namespace msfastbuild
 			var ResourceCompileItems = ActiveProject.GetItems("ResourceCompile").Where(i => i.GetMetadataValue("ExcludedFromBuild") != "true").ToList();
 			if (ResourceCompileItems.Any())
 			{
-				string RC = CompilerNode(FindTool(ActiveProject, "rc.exe"), true);
+				string RC = CompilerNode(FindTool(ActiveProject, "rc.exe"), true, ActiveProject);
 				foreach (var Item in ResourceCompileItems)
 				{
 					ToolTask Task = (ToolTask)Activator.CreateInstance(CPPTasksAssembly.GetType("Microsoft.Build.CPPTasks.RC"));
