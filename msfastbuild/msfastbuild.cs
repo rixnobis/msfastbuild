@@ -874,6 +874,49 @@ namespace msfastbuild
 				}
 			}
 
+			// NuGet native packages hand MSBuild their runtime files as ReferenceCopyLocalPaths,
+			// which _CopyFilesMarkedCopyLocal copies into OutDir; the item and include/lib
+			// settings arrive already evaluated, so only the copy needs a node.
+			if (BuildOutput == BuildType.Application || BuildOutput == BuildType.DynamicLib)
+			{
+				var CopyLocal = ActiveProject.GetItems("ReferenceCopyLocalPaths")
+					.Select(i => ProjectDirRooted(ActiveProject, i.EvaluatedInclude))
+					.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+				if (CopyLocal.Any() && !string.IsNullOrEmpty(CurrentProject.OutputNode))
+				{
+					string OutDir = ProjectDirRooted(ActiveProject, ActiveProject.GetPropertyValue("OutDir"));
+					if (!OutDir.EndsWith("\\")) OutDir += "\\";
+					// Projects sharing an OutDir copy the same files; FASTBuild allows one node per
+					// target, so later projects depend on the node that already owns it.
+					var Targets = new List<string> { CurrentProject.OutputNode };
+					var Fresh = new List<string>();
+					foreach (string Src in CopyLocal)
+					{
+						string Dst = OutDir + Path.GetFileName(Src);
+						string Owner;
+						if (CopiedTo.TryGetValue(Dst, out Owner))
+						{
+							if (!Targets.Contains(Owner)) Targets.Add(Owner);
+						}
+						else
+						{
+							CopiedTo[Dst] = N + "copylocal";
+							Fresh.Add(Src);
+						}
+					}
+					if (Fresh.Any())
+					{
+						OutputString.AppendFormat("Copy('{0}copylocal')\n{{\n", N);
+						OutputString.Append("\t.Source = { " + string.Join(",", Fresh.Select(c => "'" + Esc(c) + "'")) + " }\n");
+						OutputString.AppendFormat("\t.Dest = '{0}'\n", Esc(OutDir));
+						OutputString.Append("}\n\n");
+						Targets.Add(N + "copylocal");
+					}
+					OutputString.AppendFormat("Alias('{0}final')\n{{\n\t.Targets = {{ {1} }}\n}}\n\n", N, string.Join(", ", Targets.Select(t => "'" + t + "'")));
+					CurrentProject.OutputNode = N + "final";
+				}
+			}
+
 			if (!OneBff)
 			{
 				OutputString.Insert(0, MkdirsNode(BFFOutputFilePath));
@@ -889,6 +932,7 @@ namespace msfastbuild
 
 		// Output directories the tools expect to exist: MSBuild's MakeDirsForCl/Link create
 		// them before compiling; here an Exec node does.
+		static Dictionary<string, string> CopiedTo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		static SortedSet<string> NeededDirs = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
 		static readonly HashSet<string> FileOutputProperties = new HashSet<string>
 		{
