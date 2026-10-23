@@ -519,9 +519,17 @@ namespace msfastbuild
 		// them (ClangCl sets clang-cl.exe), else cl.exe on ExecutablePath.
 		static string CompilerExecutable(Project P)
 		{
-			string ToolExe = P.GetPropertyValue("CLToolExe");
-			string ToolPath = P.GetPropertyValue("CLToolPath");
-			if (string.IsNullOrEmpty(ToolExe)) ToolExe = "cl.exe";
+			return ToolExecutable(P, "CL", "cl.exe");
+		}
+
+		// The executable a CPPTasks ToolTask would run: <Prefix>ToolPath\<Prefix>ToolExe when the
+		// toolset sets them, else Default on ExecutablePath. ClangCl sets CLToolExe clang-cl.exe,
+		// LinkToolExe lld-link.exe and LibToolExe llvm-lib.exe.
+		static string ToolExecutable(Project P, string Prefix, string Default)
+		{
+			string ToolExe = P.GetPropertyValue(Prefix + "ToolExe");
+			string ToolPath = P.GetPropertyValue(Prefix + "ToolPath");
+			if (string.IsNullOrEmpty(ToolExe)) ToolExe = Default;
 			if (!string.IsNullOrEmpty(ToolPath) && File.Exists(Path.Combine(ToolPath, ToolExe)))
 				return Path.GetFullPath(Path.Combine(ToolPath, ToolExe));
 			return FindTool(P, ToolExe);
@@ -787,7 +795,7 @@ namespace msfastbuild
 			{
 				CurrentProject.OutputNode = N + "output";
 				OutputString.AppendFormat("{0}('{1}')\n{{\n", BuildOutput == BuildType.Application ? "Executable" : "DLL", CurrentProject.OutputNode);
-				OutputString.AppendFormat("\t.Linker = '{0}'\n", Esc(FindTool(ActiveProject, "link.exe")));
+				OutputString.AppendFormat("\t.Linker = '{0}'\n", Esc(ToolExecutable(ActiveProject, "Link", "link.exe")));
 
 				var LinkDefinitions = ActiveProject.ItemDefinitions["Link"];
 				string OutputFile = ProjectDirRooted(ActiveProject, LinkDefinitions.GetMetadataValue("OutputFile"));
@@ -833,7 +841,7 @@ namespace msfastbuild
 				OutputString.AppendFormat("\t.Compiler = '{0}'\n", CC);
 				OutputString.AppendFormat("\t.CompilerOptions = '{0}'\n", Esc(string.Format("\"%1\" /Fo\"%2\" /c {0}", CompilerOptions)));
 				OutputString.AppendFormat("\t.CompilerOutputPath = '{0}'\n", Esc(IntDir));
-				OutputString.AppendFormat("\t.Librarian = '{0}'\n", Esc(FindTool(ActiveProject, "lib.exe")));
+				OutputString.AppendFormat("\t.Librarian = '{0}'\n", Esc(ToolExecutable(ActiveProject, "Lib", "lib.exe")));
 
 				var LibDefinitions = ActiveProject.ItemDefinitions["Lib"];
 				string OutputFile = ProjectDirRooted(ActiveProject, LibDefinitions.GetMetadataValue("OutputFile"));
