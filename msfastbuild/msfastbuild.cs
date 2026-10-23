@@ -60,6 +60,10 @@ namespace msfastbuild
 		HelpText = "Write every project into this single bff, so FASTBuild schedules the whole solution at once instead of one project after another.")]
 		public string OneBff { get; set; }
 
+		[Option('z', "z7", DefaultValue = false,
+		HelpText = "Compile with /Z7 where the project asks for /Zi or /ZI, so FASTBuild can cache the objects.")]
+		public bool Z7 { get; set; }
+
 		[Option('v', "vs", DefaultValue = "",
 		HelpText = "Visual Studio major version to use (e.g. 18). Defaults to the newest installed.")]
 		public string VSVersion { get; set; }
@@ -958,6 +962,9 @@ namespace msfastbuild
 				if (MatchingProps.Any() && !string.IsNullOrEmpty(MetaData.EvaluatedValue))
 				{
 					string EvaluatedValue = MetaData.EvaluatedValue.Trim();
+					if (CommandLineOptions.Z7 && MetaData.Name == "DebugInformationFormat" &&
+						(EvaluatedValue == "ProgramDatabase" || EvaluatedValue == "EditAndContinue"))
+						EvaluatedValue = "OldStyle";
 					if (PathProperties.Contains(MetaData.Name))
 						EvaluatedValue = RootPathList(ProjectDir, EvaluatedValue, MetaData.Name == "AdditionalDependencies");
 					if (FileOutputProperties.Contains(MetaData.Name) && EvaluatedValue.IndexOfAny(new[] { '%', '$', '"', ';' }) < 0)
